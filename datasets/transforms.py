@@ -26,7 +26,7 @@ def get_train_transforms(image_size=224, normalize=True):
 
     transforms_list = [
         # A.Normalize(),
-        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.50, rotate_limit=45, p=.75),
+        # A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.50, rotate_limit=45, p=.75),
         A.augmentations.geometric.resize.LongestMaxSize(max_size=image_size),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
