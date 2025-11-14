@@ -1,6 +1,6 @@
 ---
 
-# Unofficial Implementation of *Whole Slide Imaging System Using Deep Learning-Based Automated Focusing*
+Unofficial Implementation of *Whole Slide Imaging System Using Deep Learning-Based Automated Focusing*
 
 **Repository Name**: *wsi_autofocus*
 **Authors**: Tristan Cotte
