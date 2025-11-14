@@ -1,5 +1,3 @@
----
-
 # Unofficial Implementation of *Whole Slide Imaging System Using Deep Learning-Based Automated Focusing*
 
 **Repository Name**: *wsiautofocus*

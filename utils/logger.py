@@ -6,7 +6,7 @@ import torch
 
 import wandb
 
-from autofocus_model import RegressionMobilenet
+from scripts.model import RegressionMobilenet
 
 
 class WeightandBiaises:

@@ -7,7 +7,7 @@ import os
 
 import numpy as np
 import torch
-from datasets.base_dataset import DifferenceAFDataset
+from dataset.base_dataset import DifferenceAFDataset
 
 from scripts.model import MobileNetV3_Regressor
 from utils.logger import WeightandBiaises
@@ -15,7 +15,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from datasets.transforms import get_train_transforms, get_valid_transforms
+from dataset.transforms import get_train_transforms, get_valid_transforms
 from utils.system import get_device, get_os
 from utils.loss import SampleWeightsLoss
 

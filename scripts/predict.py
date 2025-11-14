@@ -6,7 +6,7 @@ import torch
 import albumentations as A
 from torch.utils.data import DataLoader
 
-from datasets.base_dataset import DifferenceAFDataset
+from dataset.base_dataset import DifferenceAFDataset
 from scripts.model import MobileNetV3_Regressor
 
 
