@@ -231,12 +231,12 @@ class DeepCascadeNetwork(nn.Module):
     def forward(self, x):
         class_logits = F.softmax(self.classification_net(x))
 
-        _, class_predictions = torch.max(class_logits, 1)
-        # print()
+        classification_probability, class_predictions = torch.max(class_logits, 1)
+
         if class_predictions == 0:
-            return class_predictions, self.negative_refocus_net(x)
+            return (classification_probability, class_predictions), self.negative_refocus_net(x)
         else:
-            return class_predictions, self.positive_refocus_net(x)
+            return (classification_probability, class_predictions), self.positive_refocus_net(x)
 
 
 if __name__ == '__main__':

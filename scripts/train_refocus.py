@@ -1,11 +1,3 @@
-"""
-Regression accuracies:
-https://machinelearningmastery.com/regression-metrics-for-machine-learning/
-
-Deep learning autofocus:
-https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8803042/#r24
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -252,8 +244,12 @@ def main(args: argparse.Namespace) -> None:
     X_train = filter_by_defocus_sign(X_train, args.positive)
     X_test = filter_by_defocus_sign(X_test, args.positive)
 
-    train_dataset = AutofocusDatasetFromMetadata(X_train, train_transform)
-    test_dataset = AutofocusDatasetFromMetadata(X_test, test_transform)
+    train_dataset = AutofocusDatasetFromMetadata(images_list=X_train,
+                                                 normalize_output=args.normalize_output,
+                                                 transform=train_transform)
+    test_dataset = AutofocusDatasetFromMetadata(images_list=X_test,
+                                                normalize_output=args.normalize_output,
+                                                transform=test_transform)
 
     # -------- DATALOADERS --------
     num_workers = 0 if get_os().lower() == "windows" else os.cpu_count()
@@ -417,6 +413,13 @@ if __name__ == "__main__":
         type=int,
         help="0. L2 / 1. L1 / 2. Smooth L1 / 3. SampleWeightsLoss",
         default=0
+    )
+
+    parser.add_argument(
+        "-config", "--configuration_file",
+        type=str,
+        default='config/config.yaml',
+        help="Path of configuration file"
     )
 
     args = parser.parse_args()

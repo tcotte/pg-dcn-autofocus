@@ -1,11 +1,3 @@
-"""
-Regression accuracies:
-https://machinelearningmastery.com/regression-metrics-for-machine-learning/
-
-Deep learning autofocus:
-https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8803042/#r24
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -71,7 +63,7 @@ def train_one_epoch(
         optimizer.zero_grad()
         outputs = model(images)
 
-        loss = compute_loss(criterion, outputs, labels)
+        loss = compute_loss(criterion, outputs, labels.to(torch.float))
         loss.backward()
         optimizer.step()
 
@@ -102,7 +94,7 @@ def evaluate(
             images, labels = move_batch_to_device(images, labels, device)
 
             outputs = model(images)
-            loss = compute_loss(criterion, outputs, labels)
+            loss = compute_loss(criterion, outputs, labels.to(torch.float))
 
             _, preds = torch.max(outputs, 1)
             _, targets = torch.max(labels, 1)
@@ -165,7 +157,7 @@ def train_classification(
             criterion,
             device,
             train_metrics,
-        ), mode='reduce_overhead')
+        ), mode='reduce-overhead')
 
         # Eval
         test_metrics.reset()
@@ -175,7 +167,7 @@ def train_classification(
             criterion,
             device,
             test_metrics,
-        ), mode='reduce_overhead')
+        ), mode='reduce-overhead')
 
         # Logging
         w_b.log_classification_metrics(
@@ -217,11 +209,11 @@ def main(args: argparse.Namespace) -> None:
 
     # Transforms
     train_transform = get_train_transforms(
-        normalize=configs['used'],
+        normalize=configs['normalization']['used'],
         normalization_mean=configs['normalization']['mean'],
         normalization_std=configs['normalization']['std'])
     test_transform = get_valid_transforms(
-        normalize=configs['used'],
+        normalize=configs['normalization']['used'],
         normalization_mean=configs['normalization']['mean'],
         normalization_std=configs['normalization']['std'])
 
@@ -279,11 +271,6 @@ def main(args: argparse.Namespace) -> None:
 # -------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        prog="Autofocus on microscope",
-        description="Train a model to predict focus distance from an image.",
-        epilog="--- Tristan COTTE --- SGS France ---",
-    )
 
     parser = argparse.ArgumentParser(
         prog="Autofocus on microscope",
