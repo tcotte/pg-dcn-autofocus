@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from torchmetrics import MeanAbsoluteError
 from tqdm import tqdm
 
 from dataset.base_dataset import AutofocusDatasetFromMetadata
@@ -51,8 +52,10 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
     device: Union[torch.device, str],
-) -> float:
+) -> Tuple[float, float]:
     """Perform one full training epoch."""
+    mae = MeanAbsoluteError()
+
     model.train()
     running_loss = 0.0
 
@@ -65,12 +68,14 @@ def train_one_epoch(
         outputs = model(images)
         loss = compute_loss(criterion, outputs, labels)
 
+        mae.update(preds=outputs, target=labels)
+
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item()
 
-    return running_loss / len(dataloader)
+    return running_loss / len(dataloader), float(mae)
 
 
 def evaluate_one_epoch(
@@ -78,12 +83,13 @@ def evaluate_one_epoch(
     dataloader: DataLoader,
     criterion: nn.Module,
     device: Union[torch.device, str],
-) -> Tuple[float, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> Tuple[float, torch.Tensor, torch.Tensor, torch.Tensor, float]:
     """Evaluate one epoch and return avg loss + last batch outputs/images/labels for logging."""
+
+    mae = MeanAbsoluteError()
+
     model.eval()
     running_loss = 0.0
-
-    last_outputs, last_images, last_labels = None, None, None
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Validating", unit="batch"):
@@ -99,10 +105,12 @@ def evaluate_one_epoch(
 
             running_loss += loss.item()
 
+            mae.update(preds=outputs, target=labels)
+
             # store last batch for logging
             last_outputs, last_images, last_labels = outputs, images, labels
 
-    return running_loss / len(dataloader), last_outputs, last_images, last_labels
+    return running_loss / len(dataloader), last_outputs, last_images, last_labels, float(mae.compute())
 
 
 # -------------------------------------------------------------------------
@@ -150,7 +158,7 @@ def train_regression_model(
         # TODO implement We define the focus estimation error DMAE = |Di − ˜Di |
 
         # ---- TRAIN ----
-        train_loss = torch.compile(train_one_epoch(
+        train_loss, train_mae = torch.compile(train_one_epoch(
             model=model,
             dataloader=train_dataloader,
             optimizer=optimizer,
@@ -159,16 +167,17 @@ def train_regression_model(
         ), mode='reduce-overhead')
 
         # ---- VALIDATE ----
-        test_loss, last_outputs, last_images, last_labels = torch.compile(evaluate_one_epoch(
+        test_loss, last_outputs, last_images, last_labels, test_mae = torch.compile(evaluate_one_epoch(
             model=model,
             dataloader=test_dataloader,
             criterion=criterion,
             device=device,
         ), mode='reduce-overhead')
 
-
-
-        # ---- Log losses ----
+        # ---- Logger ----
+        # Log MAE
+        w_b.log_mae(train_mae=train_mae, test_mae=test_mae, epoch=epoch + 1)
+        # Log loss
         w_b.log_losses(
             train_loss=train_loss,
             test_loss=test_loss,
@@ -176,6 +185,7 @@ def train_regression_model(
         )
 
         print(f"Train loss: {train_loss:.4f} | Test loss: {test_loss:.4f}")
+        print(f"Train MAE: {train_mae:.4f} | Test mae: {test_mae:.4f}")
 
         if epoch % 10 == 0:
             w_b.save_checkpoint(
@@ -214,6 +224,7 @@ def train_regression_model(
 # -------------------------------------------------------------------------
 
 def main(args: argparse.Namespace) -> None:
+    assert len(args.interval_z) == 2, 'Please provide two integers for the argument --interval_z'
 
     # RANDOM SEED
     torch.manual_seed(123)
@@ -246,9 +257,11 @@ def main(args: argparse.Namespace) -> None:
 
     train_dataset = AutofocusDatasetFromMetadata(images_list=X_train,
                                                  normalize_output=args.normalize_output,
+                                                 z_range=args.interval_z,
                                                  transform=train_transform)
     test_dataset = AutofocusDatasetFromMetadata(images_list=X_test,
                                                 normalize_output=args.normalize_output,
+                                                z_range=args.interval_z,
                                                 transform=test_transform)
 
     # -------- DATALOADERS --------
@@ -271,6 +284,7 @@ def main(args: argparse.Namespace) -> None:
     # -------- MODEL / LOSS / OPTIMIZER --------
     model = RefocusingNetwork()
     if args.loss == 0:
+        # L2 Loss
         criterion = nn.MSELoss(reduction='mean')
     elif args.loss == 1:
         criterion = nn.L1Loss()
@@ -420,6 +434,13 @@ if __name__ == "__main__":
         type=str,
         default='config/config.yaml',
         help="Path of configuration file"
+    )
+
+    parser.add_argument("--interval_z",
+                        nargs='+',
+                        type=int,
+                        default=[-80, 80],
+                        help="Interval of Z defocus. Example: [-10; 10]"
     )
 
     args = parser.parse_args()

@@ -52,14 +52,14 @@ class WeightandBiaises:
         """
         wandb.log({"LR": lr}, step=epoch)
 
-    def log_mae(self, train_mse: float, test_mse: float, epoch: int) -> None:
+    def log_mae(self, train_mae: float, test_mae: float, epoch: int) -> None:
         """
         Log MSE accuracy.
-        :param test_mse:
-        :param train_mse:
+        :param test_mae:
+        :param train_mae:
         :param epoch: current epoch.
         """
-        wandb.log({"Train/RMSE": train_mse, "Test/RMSE": test_mse}, step=epoch)
+        wandb.log({"Train/MAE": train_mae, "Test/MAE": test_mae}, step=epoch)
 
     def save_model(self, model_name: str, model: torch.nn.Module) -> None:
         # final_model_dir = "last_model"
@@ -136,3 +136,13 @@ class WeightandBiaises:
         artifact = wandb.Artifact(name=name, type="model")
         artifact.add_file(local_path=path_checkpoint, name=name)
         wandb.run.log_artifact(artifact)
+
+    @staticmethod
+    def log_classification_metrics(metrics: dict[str, str], set_: str, epoch: int) -> None:
+        d = {}
+        for key, value in metrics.items():
+            capitalized_set = set_.capitalize()
+            capitalized_metric = key.capitalize()
+            d[f'{capitalized_set}/{capitalized_metric}'] = float(value)
+
+        wandb.log(d, step=epoch)

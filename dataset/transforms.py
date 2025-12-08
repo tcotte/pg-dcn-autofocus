@@ -37,14 +37,14 @@ def get_train_transforms(image_size=224, normalize=True, normalization_mean: tup
             ],
             p=0.75
         ),
-        A.Normalize(),
+
 
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5)
     ]
 
     if normalize:
-        transforms_list.insert(0, A.Normalize(mean=normalization_mean, std=normalization_std))
+        transforms_list.insert(2, A.Normalize(mean=normalization_mean, std=normalization_std))
 
     transforms_list.append(ToTensorV2())
 
@@ -66,7 +66,6 @@ def get_valid_transforms(image_size=224, normalize=True, normalization_mean: tup
     """
 
     transforms_list = [
-        A.Normalize(),
         A.Resize(image_size, image_size),
     ]
 

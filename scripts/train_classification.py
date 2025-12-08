@@ -150,24 +150,24 @@ def train_classification(
 
         # Train
         train_metrics.reset()
-        train_loss = torch.compile(train_one_epoch(
+        train_loss = train_one_epoch(
             model,
             train_dataloader,
             optimizer,
             criterion,
             device,
             train_metrics,
-        ), mode='reduce-overhead')
+        )
 
         # Eval
         test_metrics.reset()
-        test_loss = torch.compile(evaluate(
+        test_loss = evaluate(
             model,
             test_dataloader,
             criterion,
             device,
             test_metrics,
-        ), mode='reduce-overhead')
+        )
 
         # Logging
         w_b.log_classification_metrics(

@@ -122,7 +122,7 @@ class DCNNetwork(nn.Module):
         x = x.reshape(x.size()[0], -1)
         x = self.fc1(x)
         x = self.fc2(x)
-        return F.softmax(x)
+        return x
 
 
 class ARB(nn.Module):
