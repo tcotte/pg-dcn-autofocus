@@ -15,10 +15,11 @@ from tqdm import tqdm
 
 from dataset.base_dataset import AutofocusDatasetFromMetadata
 from dataset.preprocessing import filter_by_defocus_sign
+from dataset.transforms import get_train_transforms, get_valid_transforms
 from scripts.model import RefocusingNetwork
 from utils.logger import WeightandBiaises
 from utils.loss import SampleWeightsLoss
-from utils.system import get_device, get_os
+from utils.system import get_device, get_os, fix_seed, read_yaml_file
 
 
 # -------------------------------------------------------------------------
@@ -223,27 +224,19 @@ def train_regression_model(
 def main(args: argparse.Namespace) -> None:
     assert len(args.interval_z) == 2, 'Please provide two integers for the argument --interval_z'
 
-    # RANDOM SEED
-    torch.manual_seed(123)
-    torch.cuda.manual_seed_all(123)
-    np.random.seed(123)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    fix_seed()
 
-    # -------- AUGMENTATIONS --------
-    train_transform = A.Compose([
-        A.Normalize(),
-        A.Resize(args.img_size, args.img_size),
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.pytorch.transforms.ToTensorV2(),
-    ])
+    configs = read_yaml_file(yaml_file_path=args.configuration_file)
 
-    test_transform = A.Compose([
-        A.Normalize(),
-        A.Resize(args.img_size, args.img_size),
-        A.pytorch.transforms.ToTensorV2(),
-    ])
+    # Transforms
+    train_transform = get_train_transforms(
+        normalize=configs['normalization']['used'],
+        normalization_mean=configs['normalization']['mean'],
+        normalization_std=configs['normalization']['std'])
+    test_transform = get_valid_transforms(
+        normalize=configs['normalization']['used'],
+        normalization_mean=configs['normalization']['mean'],
+        normalization_std=configs['normalization']['std'])
 
     # -------- DATASETS --------
     X_train = list(imutils.paths.list_images(args.train_set))
