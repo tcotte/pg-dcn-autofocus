@@ -68,14 +68,14 @@ def train_one_epoch(
         outputs = model(images)
         loss = compute_loss(criterion, outputs, labels)
 
-        mae.update(preds=outputs, target=labels)
+        mae.update(preds=outputs.squeeze(), target=labels)
 
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item()
 
-    return running_loss / len(dataloader), float(mae)
+    return running_loss / len(dataloader), float(mae.compute())
 
 
 def evaluate_one_epoch(
@@ -98,14 +98,11 @@ def evaluate_one_epoch(
 
             outputs = model(images)
 
-            if isinstance(loss, SampleWeightsLoss):
-                loss = compute_loss(criterion, outputs, labels, batch['std'].float().to(device))
-            else:
-                loss = compute_loss(criterion, outputs, labels)
+            loss = compute_loss(criterion, outputs, labels)
 
             running_loss += loss.item()
 
-            mae.update(preds=outputs, target=labels)
+            mae.update(preds=outputs.squeeze(), target=labels)
 
             # store last batch for logging
             last_outputs, last_images, last_labels = outputs, images, labels
@@ -158,21 +155,21 @@ def train_regression_model(
         # TODO implement We define the focus estimation error DMAE = |Di − ˜Di |
 
         # ---- TRAIN ----
-        train_loss, train_mae = torch.compile(train_one_epoch(
+        train_loss, train_mae = train_one_epoch(
             model=model,
             dataloader=train_dataloader,
             optimizer=optimizer,
             criterion=criterion,
             device=device,
-        ), mode='reduce-overhead')
+        )
 
         # ---- VALIDATE ----
-        test_loss, last_outputs, last_images, last_labels, test_mae = torch.compile(evaluate_one_epoch(
+        test_loss, last_outputs, last_images, last_labels, test_mae = evaluate_one_epoch(
             model=model,
             dataloader=test_dataloader,
             criterion=criterion,
             device=device,
-        ), mode='reduce-overhead')
+        )
 
         # ---- Logger ----
         # Log MAE
