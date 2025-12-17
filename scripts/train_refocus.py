@@ -55,7 +55,7 @@ def train_one_epoch(
     device: Union[torch.device, str],
 ) -> Tuple[float, float]:
     """Perform one full training epoch."""
-    mae = MeanAbsoluteError()
+    mae = MeanAbsoluteError().to(device)
 
     model.train()
     running_loss = 0.0
@@ -87,7 +87,7 @@ def evaluate_one_epoch(
 ) -> Tuple[float, torch.Tensor, torch.Tensor, torch.Tensor, float]:
     """Evaluate one epoch and return avg loss + last batch outputs/images/labels for logging."""
 
-    mae = MeanAbsoluteError()
+    mae = MeanAbsoluteError().to(device)
 
     model.eval()
     running_loss = 0.0
