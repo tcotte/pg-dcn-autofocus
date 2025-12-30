@@ -212,3 +212,4 @@ labels/
 output/
 todo.md
 tools/
+config/config_imagenet.yaml

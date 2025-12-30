@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Union
 
 import cv2
 import exif
@@ -11,9 +11,11 @@ from imutils.paths import list_images
 from tqdm import tqdm
 
 from dataset.base_dataset import AutofocusDatasetFromMetadata
-from dataset.transforms import get_inference_transforms
 from scripts.model import DeepCascadeNetwork
 from utils.system import get_device
+
+from dataset.transforms import get_valid_transforms
+from utils.system import read_yaml_file
 
 
 def rmse(y_hat, y_ground_truth):
@@ -44,14 +46,13 @@ def load_model(classification_network_weights: str, positive_refocusing_network_
     return model
 
 
-
 def plot_fov_predictions(
-    y,
-    y_hat,
-    positive_indexes,
-    most_focus_gt_image_path: Optional[str],
-    most_focus_predicted_image_path: Optional[str],
-    min_predicted_defocus: Optional[float]
+        y,
+        y_hat,
+        positive_indexes,
+        most_focus_gt_image_path: Optional[str],
+        most_focus_predicted_image_path: Optional[str],
+        min_predicted_defocus: Optional[float]
 ):
     """Plot FOV predictions with optional ground-truth and predicted images."""
 
@@ -159,57 +160,16 @@ def main(args):
     for xy_position in os.listdir(path_dataset):
         path_images = os.path.join(path_dataset, xy_position)
 
-        # test_dataset = AutofocusDatasetFromMetadata(images_list=list(list_images(path_images)),
-        #                                             transform=get_inference_transforms())
-        #
-        # y = []
-        # y_hat = []
-        # positive_indexes = []
-        #
-        # with torch.no_grad():
-        #     for idx in tqdm(range(len(test_dataset))):
-        #         # data = torch.unsqueeze(test_dataset[idx]["X"].float(), dim=0)
-        #         data = torch.unsqueeze(test_dataset[idx]["X"], dim=0)
-        #         data_visible = test_dataset[idx]["X"].permute(1, 2, 0)
-        #         data = data.to(device)
-        #
-        #         cls, refocus = model(data)
-        #         refocus = refocus.cpu().item()
-        #
-        #         positive_indexes.append(cls.cpu().item())
-        #
-        #         y_hat.append(refocus)
-        #         y.append(test_dataset[idx]["y"])
-
         results = predict_fov(model=model,
                               image_folder=path_images,
                               batch_size=args.batch_size,
                               num_workers=args.num_workers,
-                              device=device)
+                              device=device,
+                              configuration_file=args.configuration_file,
+                              coeff=args.multiplier_coeff)
         y_hat = results['refocus_predictions']
         positive_indexes = results['classification_predictions']
         y = results['ground_truth']
-
-        # fig = plt.figure(figsize=(20, 20))
-        # plt.title(f"RMSE {rmse(y_hat=y_hat, y_ground_truth=y):.2f} / MAE {mae(y_hat=y_hat, y_ground_truth=y):.2f}")
-        # plt.plot(y, y, label='ground truth')
-        #
-        # plt.scatter([x for x, i in zip(y, positive_indexes) if i == 1],
-        #             [x for x, i in zip(y_hat, positive_indexes) if i == 1],
-        #             c='r',
-        #             s=10,
-        #             label='Predicted positive values')
-        #
-        # plt.scatter([x for x, i in zip(y, positive_indexes) if i == 0],
-        #             [x for x, i in zip(y_hat, positive_indexes) if i == 0],
-        #             c='g',
-        #             s=10,
-        #             label='Predicted negative values')
-        #
-        # plt.legend(loc='upper left')
-        #
-        # plt.xlabel('Z distance_af from focus (µm)')
-        # plt.ylabel('Predicted Z distance_af from focus (µm)')
 
         fig = plot_fov_predictions(y, y_hat, positive_indexes, get_most_focus_image_path(path_images),
                                    most_focus_predicted_image_path=results['most_focus_predicted_image_path'],
@@ -227,10 +187,21 @@ def main(args):
     df_results.to_excel(os.path.join(args.output_folder, "results.xlsx"))
 
 
-def predict_fov(model, image_folder, batch_size, num_workers, device) -> dict:
+def predict_fov(model: torch.nn.Module, image_folder: str, batch_size: int, num_workers: int,
+                device: Union[str, torch.device], configuration_file: str,
+                coeff: float) -> dict:
     # TODO include dataloader
+
+    configs = read_yaml_file(yaml_file_path=configuration_file)
+
+    # Transforms
+    test_transform = get_valid_transforms(
+        normalize=configs['normalization']['used'],
+        normalization_mean=configs['normalization']['mean'],
+        normalization_std=configs['normalization']['std'])
+
     test_dataset = AutofocusDatasetFromMetadata(images_list=list(list_images(image_folder)),
-                                                transform=get_inference_transforms(normalize=False))
+                                                transform=test_transform)
 
     y = []
     y_hat = []
@@ -240,25 +211,22 @@ def predict_fov(model, image_folder, batch_size, num_workers, device) -> dict:
 
     with torch.no_grad():
         for idx in tqdm(range(len(test_dataset))):
-            # data = torch.unsqueeze(test_dataset[idx]["X"].float(), dim=0)
-            data = torch.unsqueeze(test_dataset[idx]["X"], dim=0)
-            data_visible = test_dataset[idx]["X"].permute(1, 2, 0)
+            data = torch.unsqueeze(test_dataset[idx]["X"].float(), dim=0)
+            # data_visible = test_dataset[idx]["X"].permute(1, 2, 0)
             data = data.to(device)
 
-            cls, refocus = model(data)
+            classification, refocus = model(data)
             refocus = refocus.cpu().item()
+            cls_prob, cls_prediction = classification
+            positive_indexes.append(cls_prediction.cpu().item())
 
-            positive_indexes.append(cls.cpu().item())
-
-            y_hat.append(refocus)
+            y_hat.append(refocus*coeff)
             y.append(test_dataset[idx]["y"])
 
             if np.abs(refocus) < min_predicted_defocus:
                 min_predicted_defocus = refocus
                 most_focus_predicted_image_path = test_dataset[idx]["image_path"]
                 min_predicted_defocus_gt = test_dataset[idx]["y"]
-
-
 
     return {'refocus_predictions': y_hat,
             'classification_predictions': positive_indexes,
@@ -269,11 +237,17 @@ def predict_fov(model, image_folder, batch_size, num_workers, device) -> dict:
             }
 
 
-
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Predict autofocus values using MobileNetV3 model")
+
+    parser.add_argument(
+        "--configuration_file",
+        type=str,
+        required=True,
+        help="Path to configuration file"
+    )
 
     parser.add_argument(
         "--image_folder",
@@ -322,6 +296,13 @@ if __name__ == "__main__":
         type=int,
         default=8,
         help="Number of DataLoader workers"
+    )
+
+    parser.add_argument(
+        "--multiplier_coeff",
+        type=float,
+        default=1.0,
+        help="Output multiplier: useful when model was trained normalizing outputs"
     )
 
     args = parser.parse_args()
